@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RedactSafe — Local-First Image Redaction & Metadata Cleaner</title>
+  <meta name="description" content="Permanently redact sensitive info and strip hidden EXIF/GPS metadata from images & screenshots 100% locally in your browser. Zero server uploads." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    canvas { touch-action: none; cursor: crosshair; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased">
+
+  <!-- Navbar -->
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-2 font-bold text-lg tracking-tight">
+        <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-sm">R</span>
+        <span>RedactSafe</span>
+      </div>
+      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+        <a href="#tool" class="hover:text-indigo-600">Live Tool</a>
+        <a href="#features" class="hover:text-indigo-600">Privacy Architecture</a>
+        <a href="#pricing" class="hover:text-indigo-600">Pricing</a>
+      </nav>
+      <div class="flex items-center gap-3">
+        <button onclick="openLicenseModal()" id="licenseStatusBtn" class="text-xs font-medium px-3 py-1.5 rounded-full border border-slate-300 hover:border-indigo-600 text-slate-700">
+          Enter License Key
+        </button>
+        <a href="#pricing" class="text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">
+          Upgrade Pro
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="pt-14 pb-10 px-4 text-center max-w-4xl mx-auto">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium mb-6">
+      <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+      100% Browser-Side Processing • Files Never Leave Your Device
+    </div>
+    <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 mb-5 leading-tight">
+      Permanently Redact Sensitive Docs & Strip Hidden Metadata
+    </h1>
+    <p class="text-lg text-slate-600 max-w-2xl mx-auto mb-8">
+      Black out SSNs, bank details, and addresses on screenshots or scans while automatically wiping GPS & camera EXIF data—without uploading files to any cloud server.
+    </p>
+  </section>
+
+  <!-- Interactive Live Demo Workspace -->
+  <section id="tool" class="max-w-5xl mx-auto px-4 pb-20">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <!-- Toolbar -->
+      <div class="bg-slate-900 text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <label class="cursor-pointer bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+            <span>Upload Image (PNG/JPG/WebP)</span>
+            <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp" class="hidden" />
+          </label>
+          <button onclick="loadSampleReceipt()" class="text-xs text-slate-300 hover:text-white underline">
+            Load Sample Invoice
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 text-sm">
+          <div class="flex items-center bg-slate-800 rounded-lg p-1">
+            <button onclick="setMode('blackout')" id="btnBlackout" class="px-3 py-1 rounded bg-indigo-600 text-white text-xs font-medium">Solid Blackout</button>
+            <button onclick="setMode('pixelate')" id="btnPixelate" class="px-3 py-1 rounded text-slate-300 hover:text-white text-xs font-medium">Pixelate (Pro)</button>
+          </div>
+          <button onclick="undoLast()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs">Undo</button>
+          <button onclick="clearCanvas()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs">Reset</button>
+          <button onclick="exportCleanImage()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs">
+            Export Clean PNG
+          </button>
+        </div>
+      </div>
+
+      <!-- Canvas Area -->
+      <div class="p-6 bg-slate-100 flex flex-col items-center justify-center min-h-[380px] relative overflow-x-auto">
+        <div id="emptyState" class="text-center py-12">
+          <p class="text-slate-500 font-medium mb-2">Drag or Touch & Swipe to redact on image</p>
+          <p class="text-xs text-slate-400">Draw rectangles over sensitive areas. All EXIF/GPS metadata is stripped on export.</p>
+        </div>
+        <canvas id="editorCanvas" class="hidden max-w-full rounded shadow-md border border-slate-300 bg-white"></canvas>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-between items-center text-xs text-slate-500 gap-2">
+        <span id="metadataStatus">Metadata Status: Waiting for file...</span>
+        <span id="planBadge">Current Plan: Free (Includes subtle footer mark on export)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature Highlights -->
+  <section id="features" class="max-w-5xl mx-auto px-4 py-12 border-t border-slate-200">
+    <div class="grid md:grid-cols-3 gap-8">
+      <div class="bg-white p-6 rounded-xl border border-slate-200">
+        <h3 class="font-bold text-slate-900 mb-2">Irreversible Pixel Overwrite</h3>
+        <p class="text-sm text-slate-600">Unlike reversible PDF layers, RedactSafe flattens and overwrites underlying pixel arrays so redacted text cannot be recovered.</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl border border-slate-200">
+        <h3 class="font-bold text-slate-900 mb-2">Automatic EXIF & GPS Purge</h3>
+        <p class="text-sm text-slate-600">Re-encodes your image into a fresh binary stream, stripping camera serial numbers, timestamps, and location coordinates.</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl border border-slate-200">
+        <h3 class="font-bold text-slate-900 mb-2">GDPR & Compliance Ready</h3>
+        <p class="text-sm text-slate-600">Built for accountants, HR teams, lawyers, and creators sharing client documents or receipts publicly.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing Section -->
+  <section id="pricing" class="max-w-5xl mx-auto px-4 py-16">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-extrabold text-slate-900 mb-3">Simple, Transparent Pricing</h2>
+      <p class="text-slate-600">Start for free. Upgrade once for unlimited watermark-free exports and pixelation tools.</p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+      <!-- Free Plan -->
+      <div class="bg-white rounded-2xl p-8 border border-slate-200 flex flex-col justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-slate-900">Starter</h3>
+          <div class="mt-4 mb-6">
+            <span class="text-4xl font-extrabold">$0</span>
+            <span class="text-slate-500 text-sm"> / forever</span>
+          </div>
+          <ul class="space-y-3 text-sm text-slate-600 mb-8">
+            <li>✓ Unlimited local image redactions</li>
+            <li>✓ Automatic EXIF / GPS metadata stripping</li>
+            <li>✓ Solid blackout redaction brush</li>
+            <li class="text-slate-400">• Small watermark on exported files</li>
+          </ul>
+        </div>
+        <a href="#tool" class="w-full block text-center py-2.5 px-4 rounded-lg border border-slate-300 font-semibold text-sm hover:bg-slate-50 transition">
+          Use Free Tool
+        </a>
+      </div>
+
+      <!-- Pro Plan (Connected to Creem Checkout) -->
+      <div class="bg-slate-900 text-white rounded-2xl p-8 border-2 border-indigo-500 shadow-lg flex flex-col justify-between relative">
+        <span class="absolute -top-3 right-6 bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">LIFETIME ACCESS</span>
+        <div>
+          <h3 class="text-lg font-bold">RedactSafe Pro</h3>
+          <div class="mt-4 mb-6">
+            <span class="text-4xl font-extrabold">$9.90</span>
+            <span class="text-slate-400 text-sm"> / one-time payment</span>
+          </div>
+          <ul class="space-y-3 text-sm text-slate-300 mb-8">
+            <li>✓ Everything in Starter</li>
+            <li>✓ Zero watermarks on high-res exports</li>
+            <li>✓ Mosaic / Pixelate redaction mode</li>
+            <li>✓ Instant License Key delivery via email</li>
+          </ul>
+        </div>
+        <!-- Replace href with your Creem Product Payment Link -->
+        <a href="https://www.creem.io/payment/prod_YOUR_PRODUCT_ID" target="_blank" rel="noopener noreferrer"
+           class="w-full block text-center py-3 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-semibold text-sm text-white transition">
+          Buy Pro License ($9.90)
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer with Independent Compliance Links -->
+  <footer class="bg-white border-t border-slate-200 mt-12">
+    <div class="max-w-6xl mx-auto px-4 py-10 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+      <div>
+        <span class="font-semibold text-slate-800">RedactSafe</span> &copy; 2026. All rights reserved.
+        <span class="block md:inline md:ml-3">Support: <a href="mailto:lijianping001@gmail.com" class="text-indigo-600 hover:underline">lijianping001@gmail.com</a></span>
+      </div>
+      <div class="flex flex-wrap gap-6">
+        <a href="terms.html" class="hover:text-slate-900">Terms of Service</a>
+        <a href="privacy.html" class="hover:text-slate-900">Privacy Policy</a>
+        <a href="refund.html" class="hover:text-slate-900">Refund Policy</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- License Key Activation Modal -->
+  <div id="licenseModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
+      <h3 class="text-lg font-bold mb-2">Activate Pro License</h3>
+      <p class="text-sm text-slate-600 mb-4">Enter the license key sent to your email after purchasing via Creem.</p>
+      <input type="text" id="licenseKeyInput" placeholder="e.g. CREEM-PRO-XXXX-XXXX" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm mb-4 uppercase" />
+      <div class="flex justify-end gap-2">
+        <button onclick="closeLicenseModal()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+        <button onclick="activateLicense()" class="px-4 py-2 text-sm bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Activate</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- State Management ---
+    const canvas = document.getElementById('editorCanvas');
+    const ctx = canvas.getContext('2d');
+    const emptyState = document.getElementById('emptyState');
+    let baseImage = null;
+    let redactions = [];
+    let isDrawing = false;
+    let startX = 0, startY = 0;
+    let currentMode = 'blackout';
+    let isPro = localStorage.getItem('redactSafePro') === 'true';
+
+    function updateProUI() {
+      if (isPro) {
+        document.getElementById('licenseStatusBtn').textContent = 'Pro Activated ✓';
+        document.getElementById('licenseStatusBtn').classList.add('border-emerald-500', 'text-emerald-700', 'bg-emerald-50');
+        document.getElementById('planBadge').textContent = 'Current Plan: Pro Lifetime (Watermark-Free & Pixelate Unlocked)';
+      }
+    }
+    updateProUI();
+
+    // --- Image Loading ---
+    document.getElementById('imageInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          baseImage = img;
+          redactions = [];
+          initCanvas(img.width, img.height);
+          document.getElementById('metadataStatus').textContent =
+            `Loaded: ${file.name} (${img.width}x${img.height}px) — EXIF/GPS will be stripped upon export.`;
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function loadSampleReceipt() {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = 760;
+      tempCanvas.height = 440;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.fillStyle = '#ffffff';
+      tctx.fillRect(0, 0, 760, 440);
+      tctx.strokeStyle = '#cbd5e1';
+      tctx.strokeRect(20, 20, 720, 400);
+      tctx.fillStyle = '#0f172a';
+      tctx.font = 'bold 22px sans-serif';
+      tctx.fillText('SAMPLE INVOICE #INV-2026-8841', 45, 65);
+      tctx.font = '15px monospace';
+      tctx.fillStyle = '#334155';
+      tctx.fillText('Client Name:   Johnathan Doe (Drag or touch & swipe over sensitive lines)', 45, 115);
+      tctx.fillText('Tax ID / SSN:  492-88-1029', 45, 155);
+      tctx.fillText('IBAN Account:  DE89 3704 0044 0532 0130 00', 45, 195);
+      tctx.fillText('Billing Addr:  742 Evergreen Terrace, Suite 4B, New York, NY', 45, 235);
+      tctx.fillText('Total Amount:  $4,250.00 USD (Paid)', 45, 295);
+
+      const img = new Image();
+      img.onload = () => {
+        baseImage = img;
+        redactions = [];
+        initCanvas(img.width, img.height);
+        document.getElementById('metadataStatus').textContent = 'Sample Invoice Loaded — Swipe over SSN or IBAN to redact.';
+      };
+      img.src = tempCanvas.toDataURL();
+    }
+
+    function initCanvas(w, h) {
+      emptyState.classList.add('hidden');
+      canvas.classList.remove('hidden');
+      canvas.width = w;
+      canvas.height = h;
+      renderCanvas();
+    }
+
+    function setMode(mode) {
+      if (mode === 'pixelate' && !isPro) {
+        alert('Pixelate / Mosaic mode is a Pro feature. Click "Upgrade Pro" or enter a valid license key.');
+        return;
+      }
+      currentMode = mode;
+      document.getElementById('btnBlackout').className = mode === 'blackout'
+        ? 'px-3 py-1 rounded bg-indigo-600 text-white text-xs font-medium'
+        : 'px-3 py-1 rounded text-slate-300 hover:text-white text-xs font-medium';
+      document.getElementById('btnPixelate').className = mode === 'pixelate'
+        ? 'px-3 py-1 rounded bg-indigo-600 text-white text-xs font-medium'
+        : 'px-3 py-1 rounded text-slate-300 hover:text-white text-xs font-medium';
+    }
+
+    // --- Unified Mouse & Touch Coordinate Handler ---
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+
+    // Mouse Events
+    canvas.addEventListener('mousedown', (e) => {
+      if (!baseImage) return;
+      isDrawing = true;
+      const pos = getPos(e);
+      startX = pos.x;
+      startY = pos.y;
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isDrawing) return;
+      const pos = getPos(e);
+      renderCanvas();
+      drawBox({ x: startX, y: startY, w: pos.x - startX, h: pos.y - startY, mode: currentMode });
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (!isDrawing) return;
+      isDrawing = false;
+      const pos = getPos(e);
+      const w = pos.x - startX;
+      const h = pos.y - startY;
+      if (Math.abs(w) > 4 && Math.abs(h) > 4) {
+        redactions.push({ x: startX, y: startY, w, h, mode: currentMode });
+      }
+      renderCanvas();
+    });
+
+    // Touch Events (Mobile / Tablet Support)
+    canvas.addEventListener('touchstart', (e) => {
+      if (!baseImage) return;
+      isDrawing = true;
+      const pos = getPos(e);
+      startX = pos.x;
+      startY = pos.y;
+      e.preventDefault(); // Prevent page scrolling while drawing
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (!isDrawing) return;
+      const pos = getPos(e);
+      renderCanvas();
+      drawBox({ x: startX, y: startY, w: pos.x - startX, h: pos.y - startY, mode: currentMode });
+      e.preventDefault();
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      if (!isDrawing) return;
+      isDrawing = false;
+      const pos = getPos(e.changedTouches ? { touches: [e.changedTouches[0]] } : e);
+      const w = pos.x - startX;
+      const h = pos.y - startY;
+      if (Math.abs(w) > 4 && Math.abs(h) > 4) {
+        redactions.push({ x: startX, y: startY, w, h, mode: currentMode });
+      }
+      renderCanvas();
+      e.preventDefault();
+    }, { passive: false });
+
+    function drawBox(box) {
+      const rx = box.w < 0 ? box.x + box.w : box.x;
+      const ry = box.h < 0 ? box.y + box.h : box.y;
+      const rw = Math.abs(box.w);
+      const rh = Math.abs(box.h);
+
+      if (box.mode === 'pixelate' && rw > 0 && rh > 0) {
+        const size = 12;
+        for (let y = ry; y < ry + rh; y += size) {
+          for (let x = rx; x < rx + rw; x += size) {
+            const pixel = ctx.getImageData(Math.min(x + 2, canvas.width - 1), Math.min(y + 2, canvas.height - 1), 1, 1).data;
+            ctx.fillStyle = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
+            ctx.fillRect(x, y, size, size);
+          }
+        }
+      } else {
+        ctx.fillStyle = '#09090b';
+        ctx.fillRect(rx, ry, rw, rh);
+      }
+    }
+
+    function renderCanvas() {
+      if (!baseImage) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(baseImage, 0, 0);
+      redactions.forEach(drawBox);
+    }
+
+    function undoLast() {
+      redactions.pop();
+      renderCanvas();
+    }
+
+    function clearCanvas() {
+      redactions = [];
+      renderCanvas();
+    }
+
+    function exportCleanImage() {
+      if (!baseImage) {
+        alert('Please upload an image or load the sample invoice first.');
+        return;
+      }
+      renderCanvas();
+      if (!isPro) {
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+        ctx.fillRect(canvas.width - 235, canvas.height - 30, 225, 22);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Redacted via RedactSafe (Free)', canvas.width - 225, canvas.height - 15);
+      }
+      const link = document.createElement('a');
+      link.download = `redacted-clean-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      renderCanvas();
+    }
+
+    // --- License Modal ---
+    function openLicenseModal() { document.getElementById('licenseModal').classList.remove('hidden'); }
+    function closeLicenseModal() { document.getElementById('licenseModal').classList.add('hidden'); }
+
+    function activateLicense() {
+      const key = document.getElementById('licenseKeyInput').value.trim();
+      if (key.length >= 8) {
+        isPro = true;
+        localStorage.setItem('redactSafePro', 'true');
+        updateProUI();
+        closeLicenseModal();
+        alert('Pro License activated! Watermarks are now removed.');
+      } else {
+        alert('Please enter a valid license key.');
+      }
+    }
+  </script>
+</body>
+</html>
